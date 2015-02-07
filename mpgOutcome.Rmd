@@ -1,0 +1,101 @@
+---
+title: Prediction of the transmission mode giving better mileage per gallon
+  for cars in mtcars dataset
+author: "Piyush"
+date: "Monday, January 20, 2015"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+```{r loadData}
+library(datasets)
+library(ggplot2)
+data(mtcars)
+
+dimen<-dim(mtcars)
+#Seeing a summary of the dataset
+head(mtcars,7)
+```
+
+<b>This data set consists of `r dimen[1]` observations (car models) and `r dimen[2]` parameters for evaluating the performance of each observation</b>
+
+<b>Section 1. </b>In this section we shall see if there is a relationship at all between 'mpg' and the predictor variables. We shall test this by fitting a linear model and testing the p value of the F statistic
+
+``` {r validate_Relationship}
+fit0<-lm(mpg~., data=mtcars)
+result0<-summary(fit0)$fstatistic
+p <- pf(result0[1],result0[2],result0[3],lower.tail=F)
+pValue<-summary(fit0)$coeff
+pValue<-pValue[order(pValue[,4]),]
+pValue
+par(mfrow=c(2,2))
+plot(fit0)
+```
+
+<b>Conclusion 1:</b> The p value associated with the F statistic is `r p`. Since the p value is low, we can say that a relationship exists.
+
+  Also, there is a strong pattern observed in the plot of residuals vs fitted values, assuming linearity in the data. Presence of this strong pattern suggests non-linearity in the relationship.
+  
+  We also observe that the most significant p value is for wt. However since our variable of concern is 'am', we shall start building our model with that and move on with the others.
+
+<b>Section 2. </b>In this section we shall see try to understand the nature of the relationship that the response mileage per gallon holds with each of the respective quantitative predictor variables thorugh feature plots of response vs predictor
+
+```{r predict_AssociationType}
+pairs(mtcars[c(1,3:7)], panel = panel.smooth, main = "MTCARS data")
+```
+
+<b>Conclusion 2:</b> The plot clearly shows a non linear (mostly quadratic) association for the predictors 'disp' and 'hp'. However, the predictors 'wt', 'drat' and 'qsec' can well approximated by a least squares line.
+
+<b>Section 3. </b>In this section , we will do a nested model testing for seeing which of the predictors are significant.We will carry out the test based on the p-Value for the t-statistic of the individual predictors in the model that was made with all the predictors.
+
+  <b>3.1. </b>Our first block includes variables for the weight, disp, drat and horsepower.
+
+```{r pickCovariates_block1}
+pValue<-pValue[-2,]
+fit1<-lm(mpg~factor(am), data=mtcars)
+fit2<-update(fit1,mpg~factor(am)+wt)
+fit3<-update(fit2,mpg~factor(am)+wt+qsec)
+fit4<-update(fit3,mpg~factor(am)+wt+qsec+hp+I(hp^2))
+fit5<-update(fit4,mpg~factor(am)+wt+qsec+hp+I(hp^2)+disp+I(disp^2))
+fit6<-update(fit5,mpg~factor(am)+wt+qsec+hp+I(hp^2)+disp+I(disp^2)+drat)
+fit7<-update(fit6,mpg~factor(am)+wt+qsec+hp+I(hp^2)+disp+I(disp^2)+drat+factor(gear))
+result1<-anova(fit1,fit2,fit3,fit4,fit5,fit6,fit7)
+result1
+```
+
+  <b>Conclusion: </b>If we include am variable, it makes sense to include variable 'wt' since the p value associated with the second model w.r.t. to the first is `r result1[2,6]`. Also, if we include variables 'wt' and 'am', it makes sense to include 'qsec' variable since the p value for the third model with respect to the second model is `r result1[3,6]`. However, it does not make sense to include variables for 'hp', 'disp', 'drat' and 'gear' because the pvalues associated with thier models are statistically insignificant
+  
+  <b>3.2. </b>The second block will test the inclusion the variables 'carb', 'vs' and 'cyl'. Also, the model on which it will be done will be exempted from 'hp', 'disp', 'drat' and 'gear'.
+
+```{r pickCovariates_block2}
+fit8<-lm(mpg~factor(am)+wt+qsec, data=mtcars)
+fit9<-update(fit8,mpg~factor(am)+wt+qsec+factor(carb))
+fit10<-update(fit9,mpg~factor(am)+wt+qsec+factor(carb)+vs)
+fit11<-update(fit10,mpg~factor(am)+wt+qsec+factor(carb)+vs+factor(cyl))
+result2<-anova(fit8,fit9,fit10,fit11)
+result2
+```
+
+  <b>Conclusion: </b>Clearly, we see that the p-values ofr the models are not significant. So, we will not take the following models.
+
+    
+<b>Section 4. </b>Now that we have our model of interest, we will look create a summary of the coefficents for the variables of our concern.
+
+
+```{r test1}
+fit12<-lm(mpg~factor(am)+wt+qsec, data=mtcars)
+coeff<-summary(fit12)$coeff
+coeff
+```
+
+<b>Conclusion: </b>Clearly, we see that the coefficient for automatic transmission is positive. Moving on towards quantifying the contribution, we see that manual transmission has an average value of `r coeff[1,1]`, whereas that of automatic transmission increases it by `r coeff[2,1]`.
+
+<b>APPENDIX</b>
+```{r test2}
+qplot(wt,mpg,data=mtcars,col=am)
+qplot(qsec,mpg,data=mtcars,col=am)
+```
+
+<b>Conclusion: </b>However, if do do an individual plot of wt on mpg, and colour the data points by variable 'am', we see that manual transmission seems to be associated with higher values of mpg. Same results are seen when we try to analyze the plot of qsec vs mpg. This phenomenon can be explained as confounding.
+
